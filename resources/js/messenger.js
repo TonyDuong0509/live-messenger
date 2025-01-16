@@ -4,6 +4,14 @@
  * ------------------------------------------
  */
 
+function enableChatBoxLoader() {
+    $(".wsus__message_paceholder").removeClass("d-none");
+}
+
+function disableChatBoxLoader() {
+    $(".wsus__message_paceholder").addClass("d-none");
+}
+
 function imageFilePreview(input, selector) {
     if (input.files && input.files[0]) {
         let render = new FileReader();
@@ -88,6 +96,45 @@ function debounce(callback, delay) {
 
 /**
  * ------------------------------------------
+ * Fetch id data of user and update the view
+ * ------------------------------------------
+ */
+
+function IDinfo(id) {
+    $.ajax({
+        method: "GET",
+        url: "message/id-info",
+        data: { id: id },
+        beforeSend: function () {
+            NProgress.start();
+            enableChatBoxLoader();
+        },
+        success: function (response) {
+            $(".messenger-header")
+                .find("img")
+                .attr("src", response.fetch.avatar);
+            $(".messenger-header").find("h4").text(response.fetch.name);
+            $(".messenger-info-view .user_photo")
+                .find("img")
+                .attr("src", response.fetch.avatar);
+            $(".messenger-info-view")
+                .find(".user_name")
+                .text(response.fetch.name);
+            $(".messenger-info-view")
+                .find(".user_unique_name")
+                .text(response.fetch.user_name);
+            NProgress.done();
+            disableChatBoxLoader();
+        },
+        error: function (xhr, status, error) {
+            NProgress.done();
+            disableChatBoxLoader();
+        },
+    });
+}
+
+/**
+ * ------------------------------------------
  * On Dum Load
  * ------------------------------------------
  */
@@ -114,5 +161,11 @@ $(document).ready(function () {
     actionOnScroll(".user_search_list_result", function () {
         let value = $(".user_search").val();
         searchUsers(value);
+    });
+
+    // Click action for messenger list item
+    $("body").on("click", ".messenger_list_item", function () {
+        const dataId = $(this).data("id");
+        IDinfo(dataId);
     });
 });
