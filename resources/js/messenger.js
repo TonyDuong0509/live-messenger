@@ -1,18 +1,39 @@
 /**
  * ------------------------------------------
+ * Global Variables
+ * ------------------------------------------
+ */
+
+let temporaryMsgId = 0;
+
+const messageForm = $(".messenger-form");
+const messageInput = $(".message-input");
+const messageBoxContainer = $(".wsus__chat_area_body");
+const csrf_token = $("meta[name=csrf_token]").attr("content");
+
+const getMessengerId = () => {
+    return $("meta[name=id]").attr("content");
+};
+
+const setMessengerId = (id) => {
+    $("meta[name=id]").attr("content", id);
+};
+
+/**
+ * ------------------------------------------
  * Reuseable Functions
  * ------------------------------------------
  */
 
-function enableChatBoxLoader() {
+const enableChatBoxLoader = () => {
     $(".wsus__message_paceholder").removeClass("d-none");
-}
+};
 
-function disableChatBoxLoader() {
+const disableChatBoxLoader = () => {
     $(".wsus__message_paceholder").addClass("d-none");
-}
+};
 
-function imageFilePreview(input, selector) {
+const imageFilePreview = (input, selector) => {
     if (input.files && input.files[0]) {
         let render = new FileReader();
 
@@ -22,13 +43,13 @@ function imageFilePreview(input, selector) {
 
         render.readAsDataURL(input.files[0]);
     }
-}
+};
 
 let searchPage = 1;
 let noMoreDataSearch = false;
 let searchTempVal = "";
 let setSearchLoading = false;
-function searchUsers(query) {
+const searchUsers = (query) => {
     if (query != searchTempVal) {
         searchPage = 1;
         noMoreDataSearch = false;
@@ -69,9 +90,9 @@ function searchUsers(query) {
             },
         });
     }
-}
+};
 
-function actionOnScroll(selector, callback, topScroll = false) {
+const actionOnScroll = (selector, callback, topScroll = false) => {
     $(selector).on("scroll", function () {
         let element = $(this).get(0);
         const condition = topScroll
@@ -82,9 +103,9 @@ function actionOnScroll(selector, callback, topScroll = false) {
             callback();
         }
     });
-}
+};
 
-function debounce(callback, delay) {
+const debounce = (callback, delay) => {
     let timerId;
     return function (...args) {
         clearTimeout(timerId);
@@ -92,7 +113,7 @@ function debounce(callback, delay) {
             callback.apply(this, args);
         }, delay);
     };
-}
+};
 
 /**
  * ------------------------------------------
@@ -100,7 +121,7 @@ function debounce(callback, delay) {
  * ------------------------------------------
  */
 
-function IDinfo(id) {
+const IDinfo = (id) => {
     $.ajax({
         method: "GET",
         url: "message/id-info",
@@ -131,7 +152,96 @@ function IDinfo(id) {
             disableChatBoxLoader();
         },
     });
-}
+};
+
+/**
+ * ------------------------------------------
+ * Send Message
+ * ------------------------------------------
+ */
+
+const sendMessage = () => {
+    temporaryMsgId += 1;
+    let tempID = `temp_${temporaryMsgId}`;
+    let hasAttachment = !!$(".attachment-input").val();
+    const inputValue = messageInput.val();
+
+    if (inputValue.length > 0 || hasAttachment) {
+        const formData = new FormData($(".messenger-form")[0]);
+        formData.append("id", getMessengerId());
+        formData.append("temporaryMsgId", tempID);
+        formData.append("_token", csrf_token);
+
+        $.ajax({
+            type: "POST",
+            url: "/messenger/send-message",
+            data: formData,
+            dataType: "JSON",
+            processData: false,
+            contentType: false,
+            beforeSend: function () {
+                // Add temp message on dom
+                if (hasAttachment) {
+                    messageBoxContainer.append(
+                        sendTempMessageCard(inputValue, tempID, true)
+                    );
+                } else {
+                    messageBoxContainer.append(
+                        sendTempMessageCard(inputValue, tempID)
+                    );
+                }
+                messageFormReset();
+            },
+            success: function (response) {
+                const tempMsgCardElement = messageBoxContainer.find(
+                    `.message-card[data-id=${response.tempID}]`
+                );
+                tempMsgCardElement.before(response.message);
+                tempMsgCardElement.remove();
+            },
+            error: function (xhr, status, error) {},
+        });
+    }
+};
+
+const sendTempMessageCard = (message, tempId, attachment = false) => {
+    if (attachment) {
+        return `
+        <div class="wsus__single_chat_area message-card" data-id=${tempId}>
+            <div class="wsus__single_chat chat_right">
+                <div class="pre_loader">
+                    <div class="spinner-border text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                ${
+                    message.length > 0
+                        ? `<p class="messages">${message}</p>`
+                        : ""
+                }
+                 <span class="far fa-clock"> đang gửi...</span>
+                <a class="action" href="#"><i class="fas fa-trash"></i></a>
+            </div>
+        </div>
+    `;
+    } else {
+        return `
+        <div class="wsus__single_chat_area message-card" data-id=${tempId}>
+            <div class="wsus__single_chat chat_right">
+                <p class="messages">${message}</p>
+                <span class="far fa-clock"> đang gửi...</span>
+                <a class="action" href="#"><i class="fas fa-trash"></i></a>
+            </div>
+        </div>
+    `;
+    }
+};
+
+const messageFormReset = () => {
+    $(".attachment-block").addClass("d-none");
+    $(".emojionearea-editor").text("");
+    messageForm.trigger("reset");
+};
 
 /**
  * ------------------------------------------
@@ -166,6 +276,23 @@ $(document).ready(function () {
     // Click action for messenger list item
     $("body").on("click", ".messenger_list_item", function () {
         const dataId = $(this).data("id");
+        setMessengerId(dataId);
         IDinfo(dataId);
+    });
+
+    // Send message
+    messageForm.on("submit", function (event) {
+        event.preventDefault();
+        sendMessage();
+    });
+
+    // Send Attachment
+    $(".attachment-input").on("change", function () {
+        imageFilePreview(this, ".attachment-preview");
+        $(".attachment-block").removeClass("d-none");
+    });
+
+    $(".cancel-attachment").on("click", function () {
+        messageFormReset();
     });
 });
